@@ -1,0 +1,23 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+.image {
+    @apply h-32 w-32 object-contain fill-slate-800
+}
+
+.item {
+    @apply w-32 m-5 border-slate-500 focus:border-2
+}
+
+.name {
+    @apply text-center truncate
+}
+
+.tab {
+    @apply h-8 border-2 border-current border-slate-800 px-3 w-32 truncate text-center min-w-[100px]
+}
+
+.list {
+    @apply w-full hover:bg-slate-600 overflow-hidden
+}

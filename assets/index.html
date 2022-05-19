@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Files++</title>
+    <link href="/tailwindcss/output.css" rel="stylesheet">
+</head>
+<body class="bg-slate-600 w-screen h-screen">
+<div class="hidden absolute rounded-lg border-2 border-current border-slate-800 bg-slate-700 z-10" id="rightclick"></div>
+<div class="bg-slate-700 h-8 flex fixed w-full overflow-x-scroll" id="tabs">
+    <button class="tab rounded-sm" id="tab-0">
+        
+    </button>
+    <button class="ml-1 mr-1 w-8 flex-none rounded-full border-2 border-current border-slate-800 bg-slate-600" id="add">
++
+    </button>
+</div>
+<div class="h-8"></div>
+<button class="ml-1 mr-1 w-8 h-8 flex-none rounded-full border-2 border-current border-slate-800 bg-slate-600" id="up">
+    ↑
+</button>
+    <div id="items" class="flex flex-wrap items-center justify-center">
+        
+    </div>
+    <script>
+        var urls = [];
+        var current_tab = 0;
+        document.addEventListener('contextmenu', event => event.preventDefault());    
+        function run(functions, args, runs) {
+            return window.__TAURI_INVOKE__(functions, args).then((res) => {return res;}).catch((err) => {alert("Error: "+err);return "";});
+        }
+        function get_image(url) {
+            if (url.match(/\.(jpeg|jpg|gif|png)$/) != null) {
+                return `<image src="asset://${url}" class="image" alt="Icon">`;
+            }
+            else {
+                return `<image src="/image/file.png" class="image" alt="Icon">`;
+            }
+        }
+        function add(url) {
+            urls[current_tab]=url;
+            update_tabes()
+            document.getElementById("items").innerHTML="";
+            run("get_files", {directory:url}).then((res) => {
+                run("remove_hidden", {files:res}).then((res) => {
+                    run("remove_files", {files:res}).then((res) => {
+                        for (var i = 0; i < res.length; i++) {
+                            document.getElementById("items").innerHTML += `<button class="item" item="${res[i]}">
+                            <img src="/image/folder.png" class="image" alt="Folder">
+                            <div class="name">
+                                    ${res[i].split(/(\\|\/)/g).pop()}
+                                </div>
+                            </button>`
+                        }
+                    })
+                    run("remove_folders", {files:res}).then((res) => {
+                        for (var i = 0; i < res.length; i++) {
+                            document.getElementById("items").innerHTML += `<button class="item" item="${res[i]}">
+                            ${get_image(res[i])}
+                                <div class="name">
+                                    ${res[i].split(/(\\|\/)/g).pop()}
+                                </div>
+                            </button>`
+                        }
+                    })
+                })
+            })
+        }
+        function clicked(e) {
+            let name = e.srcElement.parentNode.getAttribute("item");
+            run("is_folder", {name:name}).then((res) => {
+                if (res) {
+                    add(name)
+                }
+                else {
+                    run("open", {path:name});
+                }
+            });
+        }
+        window.addEventListener('load', function () {
+            document.getElementById("add").addEventListener('click', add_tab)
+        });
+        function update_tabes() {
+            for(var i=0;i<urls.length;i++) {
+                document.getElementById("tab-"+i).innerHTML=urls[i].split(/(\\|\/)/g).pop();
+            }
+            let x = document.getElementsByClassName("tab");
+            for(var i=0;i<x.length;i++) {
+                x[i].addEventListener('click', switch_tab);
+                x[i].classList.remove("bg-slate-600");
+            }
+            document.getElementById("add").addEventListener('click', add_tab)
+            document.getElementById(`tab-${current_tab}`).classList.add("bg-slate-600");
+        }
+        function switch_tab(element) {
+            current_tab = element.srcElement.id.substring(4);
+            add(urls[current_tab]);
+        }
+        document.getElementById("up").addEventListener('click', function () {
+            urls[current_tab] = urls[current_tab].slice(0,(urls[current_tab].split(/(\\|\/)/g).pop().length+1)*-1);
+            add(urls[current_tab]);
+        });
+        document.addEventListener("mousedown", clicks);
+        function clicks(e) {
+            if (e.srcElement.id == "delete") {
+                let index = e.srcElement.attributes.getNamedItem("tab").value
+                urls.splice(index, 1);
+                current_tab-=1;
+                let new_tab=false;
+                if (current_tab==-1) {
+                    if (urls.length == 0) {
+                        current_tab = 0;
+                        new_tab=true;
+                    }
+                    else {
+                        current_tab = 0;
+                    }
+                }
+                if (new_tab) {
+                    run("home", window.Object(null)).then((res) => {
+                        add(res);
+                    });
+                }
+                else {
+                    var tabs = document.getElementById("tabs").children;
+                    tabs[current_tab].outerHTML="";
+                    for(var i=current_tab;i<urls.length;i++) {
+                        tabs[i].id="tab-"+(tabs[i].id.substring(4)-1);
+                    }
+                    add(urls[current_tab]);
+                }
+            } 
+            else if (e.srcElement.id == "move_left") {
+                let index = parseInt(e.srcElement.attributes.getNamedItem("tab").value);
+                if (index>0) {
+                    urls = move(urls, index, index-1);
+                    let html = document.getElementById("tab-"+(index-1)).outerHTML;
+                    document.getElementById("tab-"+(index-1)).outerHTML="";
+                    document.getElementById("tab-"+index).outerHTML+=html;
+                    document.getElementById("tab-"+index).id="temp";
+                    document.getElementById("tab-"+(index-1)).id="tab-"+index;
+                    document.getElementById("temp").id="tab-"+(index-1);
+                    if (current_tab==index) {
+                        current_tab-=1;
+                    }
+                    else if (current_tab==index-1) {
+                        current_tab+=1;
+                    }
+                    add(urls[current_tab]);
+                }
+                    }else if (e.srcElement.id == "move_right") {
+                let index = parseInt(e.srcElement.attributes.getNamedItem("tab").value);
+                if (index<urls.length-1) {
+                    urls = move(urls, index, index+1);
+                    console.log(("tab-"+(index+1)));
+                    let html = document.getElementById("tab-"+index).outerHTML;
+                    document.getElementById("tab-"+index).outerHTML="";
+                    document.getElementById("tab-"+(index+1)).outerHTML+=html;
+                    document.getElementById("tab-"+index).id="temp";
+                    document.getElementById("tab-"+(index+1)).id="tab-"+index;
+                    document.getElementById("temp").id="tab-"+(index+1);
+                    if (current_tab==index) {
+                        current_tab+=1;
+                    }
+                    else if (current_tab==index+1) {
+                        current_tab-=1;
+                    }
+                    add(urls[current_tab]);
+                }
+            }
+            document.getElementById("rightclick").classList.add("hidden");
+        if ((e.which === 3 || e.button === 2)&&e.srcElement.classList.contains("tab"))
+        {
+            document.getElementById("rightclick").classList.remove("hidden");
+            document.getElementById("rightclick").style.top = mouseY(e) + 'px';
+            document.getElementById("rightclick").style.left = mouseX(e) + 'px';
+            document.getElementById("rightclick").innerHTML = `<button id="delete" tab="${e.srcElement.id.substring(4)}" class="list">Delete</button><button class="list"  tab="${e.srcElement.id.substring(4)}" id="move_left">Move Left</button><button id="move_right"  tab="${e.srcElement.id.substring(4)}" class="list">Move Right</button>`
+        }
+        }
+        function move(arr, old_index, new_index) {
+            while (old_index < 0) {
+                old_index += arr.length;
+            }
+            while (new_index < 0) {
+                new_index += arr.length;
+            }
+            if (new_index >= arr.length) {
+                var k = new_index - arr.length;
+                while ((k--) + 1) {
+                    arr.push(undefined);
+                }
+            }
+            arr.splice(new_index, 0, arr.splice(old_index, 1)[0]);
+            return arr;
+        }
+        function mouseX(evt) {
+            if (evt.pageX) {
+                return evt.pageX;
+            } else if (evt.clientX) {
+                return evt.clientX + (document.documentElement.scrollLeft ?
+                    document.documentElement.scrollLeft :
+                    document.body.scrollLeft);
+            } else {
+                return null;
+            }
+        }
+
+        function mouseY(evt) {
+            if (evt.pageY) {
+                return evt.pageY;
+            } else if (evt.clientY) {
+                return evt.clientY + (document.documentElement.scrollTop ?
+                    document.documentElement.scrollTop :
+                    document.body.scrollTop);
+            } else {
+                return null;
+            }
+        }
+        function add_tab() {
+            document.getElementById("tabs").lastElementChild.outerHTML=`<button class="tab" id="tab-${urls.length}"></button>${document.getElementById("tabs").lastElementChild.outerHTML}`;
+            current_tab=urls.length;
+            run("home", window.Object(null)).then((res) => {
+                add(res);
+            });                  
+        }
+        run("home", window.Object(null)).then((res) => {
+            add(res);
+        });
+        document.getElementById("items").addEventListener("DOMSubtreeModified", function() {
+            let x = document.getElementsByClassName("item");
+            for(var i=0;i<x.length;i++) {
+                x[i].addEventListener('dblclick', clicked);
+            }
+        })
+    </script>
+</body>
+</html>
